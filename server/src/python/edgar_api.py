@@ -13,19 +13,17 @@ def extract_number(period):
 
 def cik_to_ticker(ticker, headers=headers):
     ticker = ticker.upper().replace(".","-")
-    response = requests.get("https://www.sec.gov/files/company_tickers.json", headers=headers)
-    
-    ticker_json = response.json()
-
+    url = "https://www.sec.gov/files/company_tickers.json"
+    ticker_json = requests.get(url, headers=headers).json()
     for company in ticker_json.values():
         if company["ticker"] == ticker:
             cik = str(company["cik_str"]).zfill(10)
             return cik
-        
+
     raise ValueError(f"Ticker {ticker} not found in SEC database")
 
 def data_parser_submission(ticker, headers=headers, only_filings_df=False):
-    cik = cik_to_ticker(ticker)
+    cik = cik_to_ticker(ticker, headers)
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
     company_json = requests.get(url, headers=headers).json()
     if only_filings_df:
@@ -33,10 +31,9 @@ def data_parser_submission(ticker, headers=headers, only_filings_df=False):
     return company_json
 
 
-
 #Check for enough inofrmation to have do revenue growth or dividend or earnings growth
 def get_facts(ticker, headers=headers):
-    cik = cik_to_ticker(ticker)
+    cik = cik_to_ticker(ticker, headers)
     url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     company_facts = requests.get(url, headers=headers).json()
     print("Got Facts")
@@ -44,18 +41,19 @@ def get_facts(ticker, headers=headers):
 
 def get_filtered_filings(ticker, ten_k=True, just_accession_numbers=False, headers=headers):
     company_filings_df = data_parser_submission(ticker, only_filings_df=True, headers=headers)
+    print(company_filings_df[company_filings_df['form'] == '10-K'])
     if ten_k:
         df = company_filings_df[company_filings_df['form'] == '10-K']
-    else:
+    else :
         df = company_filings_df[company_filings_df['form'] == '10-Q']
+    if len(df) <= 0:
+        df = company_filings_df[company_filings_df['form'] == '20-F']
+
     if just_accession_numbers:
-        df = df.set_index('reportDate')
-        accession_df = df['accessionNumber']
         print("Accession numbers")
-        return accession_df
+        return df.set_index("reportDate")["accessionNumber"]
     else:
         return df
-
 
 #on circumstances of issue use this method to fine the issue
 def facts_DF(ticker, headers=headers):
@@ -93,7 +91,7 @@ def annual_facts(ticker, headers=headers):
 def quarterly_facts(ticker, headers=headers):
     print("Beg Quarterly")
     accession_nums = get_filtered_filings(
-        ticker, ten_k=False, just_accession_numbers=True
+        ticker, ten_k=False, just_accession_numbers=True, headers=headers
     )
     df, label_dict = facts_DF(ticker, headers)
     ten_q = df[df["accn"].isin(accession_nums)]
@@ -143,6 +141,24 @@ def delete_csv(folder_name, ticker, statement_name, frequency):
     # revenues = fact['Revenues']['units']['usd']
 
 
+# try:
+#     # Fetch and save annual facts for BABA
+#     # df = annual_facts("BABA", headers=headers)
+#     # save_dataframe_to_csv(df, "csv", "BABA", "10-K", "1-year")
+#     # facts = get_facts("BABA")
+#     # usgaapkey = facts["facts"]["us-gaap"].keys()
+#     # print(facts["facts"]["us-gaap"]["MarketableSecuritiesCurrent"]['units']['USD'])
+#     # facts, label_dict = facts_DF("BABA")
+#     # accession_nums = get_filtered_filings(
+#     #     "BABA", ten_k=True, just_accession_numbers=True
+#     # )
+#     # print(accession_nums)
+#     # print( annual_facts("BABA", headers=headers))
+
+# except ValueError as e:
+#     print(f"Error: {e}")
+# except Exception as e:
+#     print(f"Unexpected error: {e}")
 
 
 # df = annual_facts("AAPL", headers=headers)

@@ -134,30 +134,59 @@ def income_growth(stock, years, underYear=False, quarterly=True):
 def earnings_growth(stock, years, underYear=False, quarterly=True):
     return calculate_growth(stock, years, 'earnings', underYear, quarterly)
 
-def read_df_return_fact(stock, report_type, years, metric):
-    df = pd.read_csv(f"./src/python/csv/{stock}/{report_type}_1.csv", parse_dates=False)
-    dates = [datetime.strptime(col, '%Y-%m-%d') for col in df.columns[1:]]  # assuming columns are dates from second column onward
+def read_df_return_fact(stock, report_type, years, metrics):
+    """
+    Reads financial data from a CSV file and retrieves the requested metric(s).
 
-    metric_row = df[df['fact'] == metric]
-    if metric_row.empty:
-        return f"{metric} data not available."
+    Args:
+        stock (str): Stock ticker symbol.
+        report_type (str): Report type (e.g., "[10-K]").
+        years (int): Number of years for the data.
+        metrics (list): List of metrics to search for.
+
+    Returns:
+        dict: Sanitized dictionary with metric data or an error message.
+    """
+    try:
+        # Read the CSV file
+        csv_path = f"./src/python/csv/{stock}/{report_type}_{years}.csv"
+        df = pd.read_csv(csv_path, parse_dates=False)
+
+        # Parse dates from column headers (assuming all date columns are after the first one)
+        dates = [datetime.strptime(col, '%Y-%m-%d') for col in df.columns[1:]]
+        
+        for metric in metrics:
+            # Check if the metric exists in the DataFrame
+            metric_row = df[df['fact'] == metric]
+            if not metric_row.empty:
+                # Extract the row and convert to a Pandas Series
+                metric_data = metric_row.iloc[0, 1:].astype(float)  # Convert values to float
+                metric_data.index = pd.to_datetime(dates)  # Assign date index
+                metric_data = metric_data.sort_index(ascending=False)  # Sort by date descending
+                
+                # Serialize the Series to a sanitized dictionary
+                metric_data_dict = metric_data.to_dict()
+                sanitized_data = {
+                    str(date): value if not pd.isna(value) and isinstance(value, (int, float)) else 0
+                    for date, value in metric_data_dict.items()
+                }
+                return sanitized_data
+
+        # If none of the metrics are found, return an error
+        return {"error": "None of the specified metrics are available in the dataset."}
     
-    metric_data = metric_row.iloc[0, 1:].astype(float)
-    metric_data.index = pd.to_datetime(dates)
-    metric_data = metric_data.sort_index(ascending=False)
+    except FileNotFoundError:
+        return {"error": f"CSV file not found for stock: {stock}, report_type: {report_type}, years: {years}"}
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {str(e)}"}
 
-    # Convert the index (timestamps) to string format for JSON serialization
-    metric_data_dict = metric_data.to_dict()
-    serialized_data = {str(date): value for date, value in metric_data_dict.items()}
 
-    # Return the serialized dictionary
-    return (serialized_data)
 
 
 
 def asset_turnover(stock, report_type, years):
-    target_cogs_data = read_df_return_fact(stock, report_type, years, "Cost of Goods and Services Sold")
-    target_inventory_data = read_df_return_fact(stock, report_type, years, "Inventory, Net")
+    target_cogs_data = read_df_return_fact(stock, report_type, years, ["Cost of Goods and Services Sold"])
+    target_inventory_data = read_df_return_fact(stock, report_type, years, ["Inventory, Net"])
 
     # Convert to Series
     target_cogs_series = pd.Series(target_cogs_data)
@@ -175,8 +204,8 @@ def asset_turnover(stock, report_type, years):
     return turnover_data
 
 def receivable_turnover(stock, report_type, years):
-    target_sales_data = read_df_return_fact(stock, report_type, years, "Revenue from Contract with Customer, Excluding Assessed Tax")
-    target_rec_data = read_df_return_fact(stock, report_type, years, "Increase (Decrease) in Accounts Receivable")
+    target_sales_data = read_df_return_fact(stock, report_type, years, ["Revenue from Contract with Customer, Excluding Assessed Tax"])
+    target_rec_data = read_df_return_fact(stock, report_type, years, ["Increase (Decrease) in Accounts Receivable"])
 
     # Convert to Series
     target_sales_series = pd.Series(target_sales_data)
@@ -244,8 +273,8 @@ def operating_cycle(stock, report_type, years):
 
 def account_payable_period(stock, report_type, years):
     
-    target_cogs_data = read_df_return_fact(stock, report_type, years, "Cost of Goods and Services Sold")
-    target_account_data = read_df_return_fact(stock, report_type, years, "Accounts Payable, Current") or read_df_return_fact(stock, report_type, years, "Accounts Payable and Accrued Liabilities, Current") 
+    target_cogs_data = read_df_return_fact(stock, report_type, years, ["Cost of Goods and Services Sold"])
+    target_account_data = read_df_return_fact(stock, report_type, years, ["Accounts Payable, Current", "Accounts Payable and Accrued Liabilities, Current"])
     logging.debug("Account, %s", target_account_data)
 
     # Convert to Series
@@ -321,8 +350,8 @@ def cash_cycle(stock, report_type, years):
     
 
 def debt_ratio(stock, report_type, years):
-    target_liability_data = read_df_return_fact(stock, report_type, years, "Liabilities, Noncurrent")
-    target_equity_data = read_df_return_fact(stock, report_type, years, "Stockholders' Equity Attributable to Parent")
+    target_liability_data = read_df_return_fact(stock, report_type, years, ["Liabilities, Noncurrent"])
+    target_equity_data = read_df_return_fact(stock, report_type, years, ["Stockholders' Equity Attributable to Parent"])
 
     # Convert to Series
     target_liability_series = pd.Series(target_liability_data)
@@ -338,8 +367,8 @@ def debt_ratio(stock, report_type, years):
     return data
     
 def total_debt(stock, report_type, years):
-    target_asset_data = read_df_return_fact(stock, report_type, years, "Assets")
-    target_liab_data = read_df_return_fact(stock, report_type, years, "Liabilities")
+    target_asset_data = read_df_return_fact(stock, report_type, years, ["Assets"])
+    target_liab_data = read_df_return_fact(stock, report_type, years, ["Liabilities"])
 
     # Convert to Series
     target_asset_series = pd.Series(target_asset_data)
@@ -353,9 +382,9 @@ def total_debt(stock, report_type, years):
     return data
 
 def times_interest_earned(stock, report_type, years):
-    target_income_data = read_df_return_fact(stock, report_type, years, "Net Income (Loss) Attributable to Parent")
-    target_interest_data = read_df_return_fact(stock, report_type, years, "Nonoperating Income (Expense)")
-    target_tax_data = read_df_return_fact(stock, report_type, years, "Income Tax Expense (Benefit)")
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
+    target_interest_data = read_df_return_fact(stock, report_type, years, ["Nonoperating Income (Expense)"])
+    target_tax_data = read_df_return_fact(stock, report_type, years, ["Income Tax Expense (Benefit)"])
 
     # Convert to Series
     target_income_series = pd.Series(target_income_data)
@@ -379,9 +408,9 @@ def networking_capital(liability, asset):
     return  asset - liability
 
 def networking_capital_to_assets(stock, report_type, years):
-    target_liab_data = read_df_return_fact(stock, report_type, years, "Liabilities, Current")
-    target_asset_curr_data = read_df_return_fact(stock, report_type, years, "Assets, Current")
-    target_asset_data = read_df_return_fact(stock, report_type, years, "Assets")
+    target_liab_data = read_df_return_fact(stock, report_type, years, ["Liabilities, Current"])
+    target_asset_curr_data = read_df_return_fact(stock, report_type, years, ["Assets, Current"])
+    target_asset_data = read_df_return_fact(stock, report_type, years, ["Assets"])
 
     # Convert to Series
     target_liab_series = pd.Series(target_liab_data)
@@ -400,8 +429,8 @@ def networking_capital_to_assets(stock, report_type, years):
     return data
 
 def current_ratio(stock, report_type, years):
-    target_liab_data = read_df_return_fact(stock, report_type, years, "Liabilities, Current")
-    target_asset_data = read_df_return_fact(stock, report_type, years, "Assets, Current")
+    target_liab_data = read_df_return_fact(stock, report_type, years, ["Liabilities, Current"])
+    target_asset_data = read_df_return_fact(stock, report_type, years, ["Assets, Current"])
 
     # Convert to Series
     target_liab_series = pd.Series(target_liab_data)
@@ -412,10 +441,10 @@ def current_ratio(stock, report_type, years):
     return current_ratio_series.to_dict()
 
 def quick_ratio(stock, report_type, years):
-    target_cash_data = read_df_return_fact(stock, report_type, years, "Cash and Cash Equivalents, at Carrying Value")
-    target_market_curr_data = read_df_return_fact(stock, report_type, years, "Marketable Securities, Current")
-    target_liab_data = read_df_return_fact(stock, report_type, years, "Liabilities, Current")
-    target_receiv_data = read_df_return_fact(stock, report_type, years, "Nontrade Receivables, Current")
+    target_cash_data = read_df_return_fact(stock, report_type, years, ["Cash and Cash Equivalents, at Carrying Value"])
+    target_market_curr_data = read_df_return_fact(stock, report_type, years, ["Marketable Securities, Current"])
+    target_liab_data = read_df_return_fact(stock, report_type, years, ["Liabilities, Current"])
+    target_receiv_data = read_df_return_fact(stock, report_type, years, ["Nontrade Receivables, Current"])
 
     # Convert to Series
     target_cash_series = pd.Series(target_cash_data)
@@ -434,8 +463,8 @@ def quick_ratio(stock, report_type, years):
 
 
 def after_tax_interest_expense(stock, report_type, years):
-    target_tax_data = read_df_return_fact(stock,report_type, years, "Income Tax Expense (Benefit)")
-    target_income_data = read_df_return_fact(stock,report_type, years, "Income (Loss) from Continuing Operations before Income Taxes, Noncontrolling Interest")
+    target_tax_data = read_df_return_fact(stock, report_type, years, ["Income Tax Expense (Benefit)"])
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Income (Loss) from Continuing Operations before Income Taxes, Noncontrolling Interest"])
 
     target_tax_series = pd.Series(target_tax_data)
     target_income_series = pd.Series(target_income_data)
@@ -445,9 +474,9 @@ def after_tax_interest_expense(stock, report_type, years):
 
 def return_on_capital(stock, report_type, years):
     target_interest_data = after_tax_interest_expense(stock, report_type, years)
-    target_income_data = read_df_return_fact(stock, report_type, years, "Net Income (Loss) Attributable to Parent")
-    target_liab_data = read_df_return_fact(stock, report_type, years, "Liabilities")
-    target_equity_data = read_df_return_fact(stock, report_type, years, "Stockholders' Equity Attributable to Parent")
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
+    target_liab_data = read_df_return_fact(stock, report_type, years, ["Liabilities"])
+    target_equity_data = read_df_return_fact(stock, report_type, years, ["Stockholders' Equity Attributable to Parent"])
 
     # Convert to Series
     target_interest_series = pd.Series(target_interest_data)
@@ -464,8 +493,8 @@ def return_on_capital(stock, report_type, years):
     return data
 
 def return_on_equity(stock, report_type, years):
-    target_income_data = read_df_return_fact(stock, report_type, years, "Net Income (Loss) Attributable to Parent")
-    target_equity_data = read_df_return_fact(stock, report_type, years, "Stockholders' Equity Attributable to Parent")
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
+    target_equity_data = read_df_return_fact(stock, report_type, years, ["Stockholders' Equity Attributable to Parent"])
     
     # Convert to Series
     target_income_series = pd.Series(target_income_data)
@@ -479,8 +508,8 @@ def return_on_equity(stock, report_type, years):
     return data
 
 def return_on_asset(stock, report_type, years):
-    target_income_data = read_df_return_fact(stock, report_type, years, "Net Income (Loss) Attributable to Parent")
-    target_asset_data = read_df_return_fact(stock, report_type, years, "Assets")
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
+    target_asset_data = read_df_return_fact(stock, report_type, years, ["Assets"])
     target_tax_data = after_tax_interest_expense(stock, report_type, years)
 
     # Convert to Series
@@ -497,10 +526,10 @@ def return_on_asset(stock, report_type, years):
 
 
 def growth_rate(stock, report_type, years):
-    target_income_data = read_df_return_fact(stock, report_type, years, "Net Income (Loss) Attributable to Parent")
-    target_retain_data = read_df_return_fact(stock, report_type, years, "Retained Earnings (Accumulated Deficit)")
-    target_stockholder_data = read_df_return_fact(stock, report_type, years, "Stockholders' Equity Attributable to Parent")
-    target_dividend_data = read_df_return_fact(stock, report_type, years, "Dividends")
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
+    target_retain_data = read_df_return_fact(stock, report_type, years, ["Retained Earnings (Accumulated Deficit)"])
+    target_stockholder_data = read_df_return_fact(stock, report_type, years, ["Stockholders' Equity Attributable to Parent"])
+    target_dividend_data = read_df_return_fact(stock, report_type, years, ["Dividends"])
 
     # Convert to Series
     target_income_series = pd.Series(target_income_data)
@@ -525,10 +554,10 @@ def growth_rate(stock, report_type, years):
 
 def profit_margin(stock, report_type, years):
     # Read data and ensure it's in a usable form
-    target_income_data = read_df_return_fact(stock, report_type, years, "Net Income (Loss) Attributable to Parent")
-    target_revenue_data = read_df_return_fact(stock, report_type, years, "Revenue from Contract with Customer, Excluding Assessed Tax")
+    target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
+    target_revenue_data = read_df_return_fact(stock, report_type, years, ["Revenue from Contract with Customer, Excluding Assessed Tax"])
     target_tax_data = after_tax_interest_expense(stock, report_type, years)
-    target_cogs_data = read_df_return_fact(stock, report_type, years, "Cost of Goods and Services Sold")
+    target_cogs_data = read_df_return_fact(stock, report_type, years, ["Cost of Goods and Services Sold"])
 
 
     # Convert dictionaries to pandas.Series for arithmetic
@@ -549,7 +578,8 @@ def profit_margin(stock, report_type, years):
 
     return data
 
-import math
+# def is_negative_zero(x):
+#     return x == 0 and math.copysign(1, x) == -1
 
 def sanitize_data(data):
     if isinstance(data, dict):

@@ -134,18 +134,18 @@ def income_growth(stock, years, underYear=False, quarterly=True):
 def earnings_growth(stock, years, underYear=False, quarterly=True):
     return calculate_growth(stock, years, 'earnings', underYear, quarterly)
 
+def sanitize_series(series):
+    """
+    Ensures a pandas Series contains only numeric values.
+    Converts non-numeric values to NaN, then fills with 0.
+    """
+    return pd.to_numeric(series, errors='coerce').fillna(0)
+
+
 def read_df_return_fact(stock, report_type, years, metrics):
     """
     Reads financial data from a CSV file and retrieves the requested metric(s).
-
-    Args:
-        stock (str): Stock ticker symbol.
-        report_type (str): Report type (e.g., "[10-K]").
-        years (int): Number of years for the data.
-        metrics (list): List of metrics to search for.
-
-    Returns:
-        dict: Sanitized dictionary with metric data or an error message.
+    Sanitizes the data to ensure it is numeric.
     """
     try:
         # Read the CSV file
@@ -154,43 +154,44 @@ def read_df_return_fact(stock, report_type, years, metrics):
 
         # Parse dates from column headers (assuming all date columns are after the first one)
         dates = [datetime.strptime(col, '%Y-%m-%d') for col in df.columns[1:]]
-        
+
         for metric in metrics:
             # Check if the metric exists in the DataFrame
             metric_row = df[df['fact'] == metric]
             if not metric_row.empty:
-                # Extract the row and convert to a Pandas Series
-                metric_data = metric_row.iloc[0, 1:].astype(float)  # Convert values to float
+                # Extract the row and sanitize the data
+                metric_data = metric_row.iloc[0, 1:].astype(str).apply(pd.to_numeric, errors='coerce').fillna(0)
                 metric_data.index = pd.to_datetime(dates)  # Assign date index
                 metric_data = metric_data.sort_index(ascending=False)  # Sort by date descending
                 
                 # Serialize the Series to a sanitized dictionary
                 metric_data_dict = metric_data.to_dict()
                 sanitized_data = {
-                    str(date): value if not pd.isna(value) and isinstance(value, (int, float)) else 0
+                    str(date): value if isinstance(value, (int, float)) else 0
                     for date, value in metric_data_dict.items()
                 }
                 return sanitized_data
 
         # If none of the metrics are found, return an error
         return {"error": "None of the specified metrics are available in the dataset."}
-    
+
     except FileNotFoundError:
         return {"error": f"CSV file not found for stock: {stock}, report_type: {report_type}, years: {years}"}
     except Exception as e:
         return {"error": f"An unexpected error occurred: {str(e)}"}
 
 
-
-
-
 def asset_turnover(stock, report_type, years):
+    """
+    Calculates inventory turnover and average days in inventory.
+    Sanitizes input data to ensure no unsupported operand errors.
+    """
     target_cogs_data = read_df_return_fact(stock, report_type, years, ["Cost of Goods and Services Sold"])
     target_inventory_data = read_df_return_fact(stock, report_type, years, ["Inventory, Net"])
 
-    # Convert to Series
-    target_cogs_series = pd.Series(target_cogs_data)
-    target_inventory_series = pd.Series(target_inventory_data)
+    # Convert to Series and sanitize
+    target_cogs_series = sanitize_series(pd.Series(target_cogs_data))
+    target_inventory_series = sanitize_series(pd.Series(target_inventory_data))
 
     # Calculate metrics
     inventory_turnover = target_cogs_series / target_inventory_series
@@ -203,14 +204,20 @@ def asset_turnover(stock, report_type, years):
     }
     return turnover_data
 
+
 def receivable_turnover(stock, report_type, years):
+    """
+    Calculates receivable turnover and average collection period.
+    Sanitizes input data to ensure no unsupported operand errors.
+    """
     target_sales_data = read_df_return_fact(stock, report_type, years, ["Revenue from Contract with Customer, Excluding Assessed Tax"])
     target_rec_data = read_df_return_fact(stock, report_type, years, ["Increase (Decrease) in Accounts Receivable"])
 
-    # Convert to Series
-    target_sales_series = pd.Series(target_sales_data)
-    target_rec_series = pd.Series(target_rec_data)
+    # Convert to Series and sanitize
+    target_sales_series = sanitize_series(pd.Series(target_sales_data))
+    target_rec_series = sanitize_series(pd.Series(target_rec_data))
 
+    # Calculate metrics
     receivable_return = target_sales_series / target_rec_series
     avg_collection = (target_rec_series / (target_sales_series / 365))
 
@@ -553,18 +560,21 @@ def growth_rate(stock, report_type, years):
 
 
 def profit_margin(stock, report_type, years):
-    # Read data and ensure it's in a usable form
+    """
+    Calculates profit margin and operating profit margin.
+    Sanitizes input data to ensure no unsupported operand errors.
+    """
+    # Read and sanitize data
     target_income_data = read_df_return_fact(stock, report_type, years, ["Net Income (Loss) Attributable to Parent"])
     target_revenue_data = read_df_return_fact(stock, report_type, years, ["Revenue from Contract with Customer, Excluding Assessed Tax"])
     target_tax_data = after_tax_interest_expense(stock, report_type, years)
     target_cogs_data = read_df_return_fact(stock, report_type, years, ["Cost of Goods and Services Sold"])
 
-
-    # Convert dictionaries to pandas.Series for arithmetic
-    target_income_series = pd.Series(target_income_data)
-    target_revenue_series = pd.Series(target_revenue_data)
-    target_tax_series = pd.Series(target_tax_data)
-    target_cogs_series = pd.Series(target_cogs_data)
+    # Convert to Series and sanitize
+    target_income_series = sanitize_series(pd.Series(target_income_data))
+    target_revenue_series = sanitize_series(pd.Series(target_revenue_data))
+    target_tax_series = sanitize_series(pd.Series(target_tax_data))
+    target_cogs_series = sanitize_series(pd.Series(target_cogs_data))
 
     # Perform calculations
     profit_margin_data = (target_revenue_series - target_cogs_series) / target_revenue_series
@@ -577,7 +587,6 @@ def profit_margin(stock, report_type, years):
     }
 
     return data
-
 # def is_negative_zero(x):
 #     return x == 0 and math.copysign(1, x) == -1
 

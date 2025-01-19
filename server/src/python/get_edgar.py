@@ -285,7 +285,7 @@ def account_payable_period(stock, report_type, years):
     logging.debug("Account, %s", target_account_data)
 
     # Convert to Series
-    target_cogs_series = pd.Series(target_cogs_data)
+    target_cogs_series = sanitize_series(pd.Series(target_cogs_data))
     target_account_series = pd.Series(target_account_data)
     logging.debug("COGS, %s", target_cogs_series)
     logging.debug("Accoun 3, %s", target_account_series)

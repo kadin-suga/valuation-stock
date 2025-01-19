@@ -6,6 +6,7 @@ import Valuation from '../ui/Valuation';
 import Summary from '../ui/Summary';
 import StockChart from '../ui/StockChart';
 import { IoIosRefresh } from "react-icons/io";
+import PuffLoader from "react-spinners/PuffLoader";
 
 function StockDash() {
   const navigate = useNavigate();
@@ -17,15 +18,19 @@ function StockDash() {
   const [currPriceChangePercent, setCurrPriceChangePercent] = useState(data?.['Market data']?.['Price change percent'] || '0.00');
   const [activeTab, setActiveTab] = useState(0);
   const [aiResponse, setAiResponse] = useState(null);
-  const [error, setError] = useState(null); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const tabs = ['Description', 'Chart', 'Financials', 'Valuations', 'AI Summary'];
   const contents = [<Description />, <StockChart />, <Financials />, <Valuation />, <Summary aiResponse={aiResponse} />];
 
   const sendBackend = async () => {
     try {
+      setLoading(true);
+      setError(null); // Clear previous errors
       if (!stockTicker) {
         setError('Please enter a valid stock ticker.');
+        setLoading(false);
         return null;
       }
 
@@ -40,24 +45,23 @@ function StockDash() {
         throw new Error(backendError || 'Error fetching stock data');
       }
 
-      return await response.json();
+      const data = await response.json();
+      setLoading(false);
+      return data;
     } catch (error) {
-      setError('Could not fetch stock data. Please try again.');
+      setError('Could not fetch AI analysis. Please try again.');
+      setLoading(false);
       return null;
-    }
-  };
-
-  const handleSearch = async () => {
-    if (stockTicker) {
-      const aiResponseData = await sendBackend();
-      setAiResponse(aiResponseData); // Store the response in state
     }
   };
 
   const updateStock = async () => {
     try {
+      setLoading(true);
+      setError(null);
       if (!stockTicker) {
         setError('Please enter a valid stock ticker.');
+        setLoading(false);
         return null;
       }
 
@@ -74,27 +78,39 @@ function StockDash() {
 
       const data = await response.json();
       setCurrPrice(data?.['Current price']?.toFixed(2) || 'N/A');
-      setCurrPriceChange(data?.['Price change']?.[0]?.toFixed(2) || '0.00'); // Use fallback value if Price change is invalid
-      setCurrPriceChangePercent(data?.['Price change']?.[1]?.toFixed(2) || '0.00'); // Ensure valid percentage or fallback
+      setCurrPriceChange(data?.['Price change']?.[0]?.toFixed(2) || '0.00');
+      setCurrPriceChangePercent(data?.['Price change']?.[1]?.toFixed(2) || '0.00');
+      setLoading(false);
     } catch (error) {
       setError('Could not fetch stock data. Please try again.');
-      return null;
+      setLoading(false);
     }
   };
 
+  // Fetch AI response when the AI Summary tab is active
   useEffect(() => {
-    if (activeTab === 4) {
-      handleSearch();
-    }
+    const fetchAiResponse = async () => {
+      if (activeTab === 4 && !aiResponse) {
+        const data = await sendBackend();
+        setAiResponse(data);
+      }
+    };
+
+    fetchAiResponse();
   }, [activeTab]);
 
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 relative">
+      {/* Overlay for loader */}
+      {loading && (
+        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <PuffLoader color="#4A90E2" size={60} />
+        </div>
+      )}
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-         <div className="mb-4">
+          <div className="mb-4">
             <button
               onClick={() => navigate(-1)}
               className="flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-700 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -112,18 +128,17 @@ function StockDash() {
             <div className="text-right">
               <div className="text-2xl font-bold text-gray-100 flex items-center">
                 <button
-                  onClick={() => updateStock()}
+                  onClick={updateStock}
                   className="mr-2 p-2 bg-gray-700 hover:bg-gray-600 rounded-full"
                   title="Refresh Price"
                 >
                   <IoIosRefresh />
                 </button>
-                ${currPrice || 'N/A'}
+                ${currPrice}
               </div>
               <div
                 className={`text-lg mt-1 ${
-                  
-                  (currPriceChange) >= 0 ? 'text-green-400' : 'text-red-400'
+                  parseFloat(currPriceChange) >= 0 ? 'text-green-400' : 'text-red-400'
                 }`}
               >
                 {currPriceChange} ({currPriceChangePercent}%)
@@ -131,6 +146,7 @@ function StockDash() {
             </div>
           </div>
         </div>
+        {/* Tabs */}
         <div className="pt-14">
           <div className="flex gap-3 justify-center items-center">
             {tabs.map((tab, index) => (
@@ -146,7 +162,6 @@ function StockDash() {
             ))}
           </div>
         </div>
-
         {/* Content */}
         <div className="w-full mx-auto px-4 py-12 my-2 bg-gray-400">
           <div className="flex flex-col mx-auto">

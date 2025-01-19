@@ -160,7 +160,7 @@ def get_stock_data():
             "History": hist_dict,
         }
         # logging.debug("Data: %s", (data))
-        # logging.debug("Data json: %s", jsonify(data))
+        logging.debug("Data json: %s", jsonify(data))
         return jsonify(data)
     except Exception as e:
         logging.error(f"Error in get_stock_data: {e}")

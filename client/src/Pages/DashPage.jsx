@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PuffLoader from 'react-spinners/PuffLoader';
 
 function Dash() {
   const navigate = useNavigate();
   const [stockName, setStockName] = useState('');
   const [stockTicker, setStockTicker] = useState('');
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const sendBackend = async () => {
     try {
@@ -13,45 +15,54 @@ function Dash() {
         setError('Please enter a valid stock ticker.');
         return null;
       }
-
+  
       const url = `http://127.0.0.1:5000/bulk_stock_data?symbol=${stockTicker}`;
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-
+  
+      console.log('Raw Response:', response);
+  
       if (!response.ok) {
         const backendError = await response.text();
         throw new Error(backendError || 'Error fetching stock data');
       }
-
-      return await response.json();
+  
+      const jsonData = await response.json();
+      console.log('Parsed JSON:', jsonData); // Log the parsed data
+      return jsonData;
     } catch (error) {
+      console.error('Error:', error.message);
       setError('Could not fetch stock data. Please try again.');
       return null;
     }
   };
-
+  
   const handleSearch = async () => {
-    if (stockTicker) {
-      const data = await sendBackend();
-      if (data) {
-        navigate(`/${stockTicker}`, { state: { stockName, stockTicker, data } });
-      }
+    setLoading(true);
+    const data = await sendBackend();
+    if (data) {
+      navigate(`/${stockTicker}`, { state: { stockName, stockTicker, data } });
     }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 relative">
+      {/* Overlay for loader */}
+      {loading && (
+        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <PuffLoader color="#4A90E2" size={60} />
+        </div>
+      )}
+
       <div className="max-w-md mx-auto px-4 py-24">
-        {/* Header Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
             Stock Analysis
           </h1>
-          <p className="text-gray-400 text-lg">
-            Enter a stock to begin your analysis
-          </p>
+          <p className="text-gray-400 text-lg">Enter a stock to begin your analysis</p>
         </div>
 
         {/* Search Card */}
@@ -59,9 +70,7 @@ function Dash() {
           <div className="space-y-6">
             {/* Stock Name Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Stock Name
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stock Name</label>
               <input
                 type="text"
                 value={stockName}
@@ -73,9 +82,7 @@ function Dash() {
 
             {/* Stock Ticker Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Stock Ticker
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stock Ticker</label>
               <input
                 type="text"
                 value={stockTicker}
@@ -84,7 +91,6 @@ function Dash() {
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-100 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
               />
             </div>
-
 
             {/* Search Button */}
             <button

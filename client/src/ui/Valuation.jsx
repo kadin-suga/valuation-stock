@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Result from '../ui/Result';
 import StockAnalysis from '../ui/Result';
+import PuffLoader from "react-spinners/PuffLoader";
+
 
 const Valuation = () => {
   const location = useLocation();
@@ -12,12 +14,15 @@ const Valuation = () => {
   const [timePeriod, setTimePeriod] = useState('1y');
   const [SEC_filing, setSEC_filing] = useState('10-k');
   const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false)
+  
   const [error, setError] = useState(null);
 
   const handleSearch = async () => {
     setError(null);
     setResult(null);
     try {
+      setLoading(true)
       if (!stockTicker) {
         setError('Please enter a valid stock ticker.');
         return;
@@ -37,8 +42,10 @@ const Valuation = () => {
       }
 
       const data = await response.json();
+      setLoading(false)
       setResult(data);
     } catch (error) {
+      setLoading(false)
       setError('Could not fetch stock data. Please try again.');
     }
   };
@@ -46,6 +53,11 @@ const Valuation = () => {
   return (
     <div className="space-y-8 text-gray-800 w-full max-w-7xl mx-auto">
       {/* Main Analysis Card */}
+      {loading && (
+        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <PuffLoader color="#4A90E2" size={60} />
+        </div>
+      )}
       <div className="bg-white rounded-lg shadow p-8">
         <h3 className="text-2xl font-semibold mb-6">Valuation Analysis</h3>
         

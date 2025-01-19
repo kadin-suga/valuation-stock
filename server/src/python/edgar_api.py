@@ -41,7 +41,6 @@ def get_facts(ticker, headers=headers):
 
 def get_filtered_filings(ticker, ten_k=True, just_accession_numbers=False, headers=headers):
     company_filings_df = data_parser_submission(ticker, only_filings_df=True, headers=headers)
-    print(company_filings_df[company_filings_df['form'] == '10-K'])
     if ten_k:
         df = company_filings_df[company_filings_df['form'] == '10-K']
     else :

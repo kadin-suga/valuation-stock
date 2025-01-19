@@ -587,21 +587,32 @@ def profit_margin(stock, report_type, years):
     }
 
     return data
-# def is_negative_zero(x):
-#     return x == 0 and math.copysign(1, x) == -1
+def is_negative_zero(x):
+    return x == 0 and math.copysign(1, x) == -1
 
 def sanitize_data(data):
+    """
+    Recursively sanitize data to make it JSON-compliant:
+    - Replace NaN, Infinity, and -Infinity with 0.
+    - Convert negative zero to 0.
+    - Ensure all keys in dictionaries are strings.
+    """
     if isinstance(data, dict):
         # Convert all keys to strings and recursively sanitize values
         return {str(k): sanitize_data(v) for k, v in data.items()}
     elif isinstance(data, list):
         # Recursively sanitize each element in the list
         return [sanitize_data(v) for v in data]
-    elif isinstance(data, float) and math.isnan(data):
-        # Replace NaN with 0
-        return 0
+    elif isinstance(data, float):
+        # Replace non-finite numbers with 0
+        if math.isnan(data) or math.isinf(data) or is_negative_zero(data):
+            return 0
+        return data
+    elif isinstance(data, int):
+        # Handle edge cases for integers (no-op, included for completeness)
+        return data
     else:
-        # Return the value as is
+        # Return the value as is (for str, bool, None, etc.)
         return data
 
     

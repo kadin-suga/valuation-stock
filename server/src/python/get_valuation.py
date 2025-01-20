@@ -1,8 +1,37 @@
-
-
 import logging
 import fetch_stock_data, get_edgar
 import pandas as pd
+import math
+
+# Sanitization function
+def sanitize_data(data):
+    """
+    Recursively sanitize data to make it JSON-compliant:
+    - Replace NaN, Infinity, and -Infinity with 0.
+    - Convert pandas Series and DataFrame to JSON-compatible formats.
+    - Ensure all keys in dictionaries are strings.
+    """
+    if isinstance(data, dict):
+        # Convert all keys to strings and sanitize values
+        return {str(k): sanitize_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        # Recursively sanitize each element in the list
+        return [sanitize_data(v) for v in data]
+    elif isinstance(data, pd.Series):
+        # Convert Series to a dictionary
+        return data.replace([float('inf'), float('-inf'), float('nan')], 0).to_dict()
+    elif isinstance(data, pd.DataFrame):
+        # Convert DataFrame to a list of dictionaries
+        return data.replace([float('inf'), float('-inf'), float('nan')], 0).to_dict(orient='records')
+    elif isinstance(data, float):
+        # Replace non-finite values with 0
+        if math.isnan(data) or math.isinf(data):
+            return 0
+        return data
+    else:
+        # Return scalar values (int, str, bool, None) as-is
+        return data
+
 
 def make_json_serializable(data):
     if isinstance(data, pd.Series):
@@ -78,11 +107,12 @@ def calculate_historical_growth(stock_data, time_period, ticker, valuation, repo
     try:
         print("History Growth")
         growth_rate = calculate_growth_rate(stock_data, time_period, ticker, valuation, report_type)
-        # print(growth_rate)
         current_price = ticker.info.get('currentPrice', None)
-        # print(current_price)
-        trailing_eps = ticker.info['trailingEps']
-        # print(trailing_eps)
+        trailing_eps = ticker.info.get('trailingEps', None)
+        
+        if current_price is None or trailing_eps is None:
+            return {'error': 'Data not available for growth calculation.'}
+        
         pe_ratio = current_price / trailing_eps
 
         # Convert Series to scalar if necessary
@@ -90,19 +120,16 @@ def calculate_historical_growth(stock_data, time_period, ticker, valuation, repo
             pe_ratio = pe_ratio.iloc[0]
         if isinstance(growth_rate, pd.Series): 
             growth_rate = growth_rate.iloc[0]
-            
-        # print(float(pe_ratio))
-        # print(growth_rate, "1")
-
+        
         data = {
-            'Price to Equity': float(pe_ratio), 
+            'Price to Equity': float(pe_ratio),
             'Growth rate data': make_json_serializable(growth_rate),
         }
 
-        return data
+        # Sanitize data before returning
+        return sanitize_data(data)
     except Exception as e:
         return {'error': str(e)}
-
 
 
 def calculate_forward_growth(stock_data, time_period, ticker, valuation, report_type):
@@ -110,27 +137,28 @@ def calculate_forward_growth(stock_data, time_period, ticker, valuation, report_
         growth_rate = calculate_growth_rate(stock_data, time_period, ticker, valuation, report_type)
         current_price = ticker.info.get('currentPrice', None)
         forward_eps = ticker.info.get('forwardEps', None)
+
+        if current_price is None or forward_eps is None:
+            return {'error': 'Data not available for growth calculation.'}
+        
         pe_ratio = current_price / forward_eps
 
-        # Check if `pe_ratio` or `growth_rate` are Series and convert
+        # Convert Series to scalar if necessary
         if isinstance(pe_ratio, pd.Series):
             pe_ratio = pe_ratio.iloc[0]
         if isinstance(growth_rate, pd.Series):
             growth_rate = growth_rate.iloc[0]
 
-        if forward_eps is None or current_price is None:
-            return {'error': 'Data not available for growth calculation.'}
-        
-        data={'Price to Equity': float(pe_ratio), 
-                'Growth rate': make_json_serializable(growth_rate), 
-                }
+        data = {
+            'Price to Equity': float(pe_ratio),
+            'Growth rate': make_json_serializable(growth_rate),
+        }
 
-        return data
+        # Sanitize data before returning
+        return sanitize_data(data)
     except Exception as e:
         return {'error': str(e)}
 
-
-    
 
 def calculate_price_earn(price2equity, growth_rate, growth_name):
     try:
@@ -142,8 +170,8 @@ def calculate_price_earn(price2equity, growth_rate, growth_name):
             f"Price / {growth_name}": (peg_value),
             "Type": False  # Type is now correctly set to False here
         }
-        return (data)
-        # Log the type of PEG value
+        # Sanitize data before returning
+        return sanitize_data(data)
     except Exception as e:
         logging.error("An error occurred in calculate_price_earn: %s", e)
 
@@ -159,17 +187,14 @@ def calculate_price_earn_dividend(growth_data, ticker):
             return "No dividend data available."
         
         recent_dividend = dividends.iloc[-1]  # Most recent dividend
-        pegy_value = price2equity /( growth_rate + recent_dividend)
+        pegy_value = price2equity / (growth_rate + recent_dividend)
 
-        data= {
+        data = {
             "Price / Earnings to Growth and Dividend yield": pegy_value,
             "Type": True  # Type is now correctly set to True here
         }
-        return data
+
+        # Sanitize data before returning
+        return sanitize_data(data)
     except Exception as e:
-        return ({"error": str(e)}), 500
-
-
-    
-
-
+        return {"error": str(e)}, 500

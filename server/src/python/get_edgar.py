@@ -425,7 +425,7 @@ def networking_capital_to_assets(stock, report_type, years):
     target_asset_series = pd.Series(target_asset_data)
 
     networking_capital_series = target_asset_curr_series - target_liab_series
-    is_liquid = networking_capital_series > 0
+    is_liquid = (networking_capital_series > 0).astype(int)
     networking_capital_ratio = networking_capital_series / target_asset_series
 
     data = {

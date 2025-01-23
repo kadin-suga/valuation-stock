@@ -162,18 +162,27 @@ def calculate_forward_growth(stock_data, time_period, ticker, valuation, report_
 
 def calculate_price_earn(price2equity, growth_rate, growth_name):
     try:
+        # Handle potential null/infinite values
+        if pd.isna(price2equity) or pd.isna(growth_rate) or growth_rate == 0:
+            return {'error': 'Invalid values for PEG calculation'}
+
         # Calculate PEG value
         peg_value = price2equity / growth_rate
+        
+        # Sanitize the PEG value
+        if math.isnan(peg_value) or math.isinf(peg_value):
+            peg_value = 0
+
         logging.debug("peg value %s", peg_value)
 
-        data= {
-            f"Price / {growth_name}": (peg_value),
-            "Type": False  # Type is now correctly set to False here
+        data = {
+            f"Price / {growth_name}": float(peg_value),
+            "Type": False
         }
-        # Sanitize data before returning
         return sanitize_data(data)
     except Exception as e:
         logging.error("An error occurred in calculate_price_earn: %s", e)
+        return {'error': str(e)}
 
 def calculate_price_earn_dividend(growth_data, ticker):
     try:
@@ -184,17 +193,25 @@ def calculate_price_earn_dividend(growth_data, ticker):
         dividends = dividends[dividends != 0.0]
 
         if dividends.empty:
-            return "No dividend data available."
+            return {'error': "No dividend data available."}
         
         recent_dividend = dividends.iloc[-1]  # Most recent dividend
+        
+        # Handle potential null/infinite values
+        if pd.isna(price2equity) or pd.isna(growth_rate) or pd.isna(recent_dividend) or (growth_rate + recent_dividend) == 0:
+            return {'error': 'Invalid values for PEGY calculation'}
+
         pegy_value = price2equity / (growth_rate + recent_dividend)
+        
+        # Sanitize the PEGY value
+        if math.isnan(pegy_value) or math.isinf(pegy_value):
+            pegy_value = 0
 
         data = {
-            "Price / Earnings to Growth and Dividend yield": pegy_value,
-            "Type": True  # Type is now correctly set to True here
+            "Price / Earnings to Growth and Dividend yield": float(pegy_value),
+            "Type": True
         }
 
-        # Sanitize data before returning
         return sanitize_data(data)
     except Exception as e:
-        return {"error": str(e)}, 500
+        return {'error': str(e)}
